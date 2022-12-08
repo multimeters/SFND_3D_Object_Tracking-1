@@ -74,8 +74,30 @@ int main(int argc, const char *argv[])
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     bool bVis = false;            // visualize results
 
+    vector<std::string> det_desc_matc_sel_string;
+    vector<vector<std::string>> det_desc_matc_sel_strings;
+    vector<std::string> detStrings={"SHITOMASI","HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"};
+    vector<std::string> decsStrings={"BRISK","BRIEF", "ORB", "FREAK", "AKAZE", "SIFT"};
+    vector<std::string> matcherStrings={"MAT_BF", "MAT_FLANN"};
+    vector<std::string> selectorStrings={"SEL_NN", "SEL_KNN"};
+    for(int i=0;i<detStrings.size();i++)
+        {
+            for(int j=0;j<decsStrings.size();j++)
+            {
+                
+                if(detStrings[i]=="AKAZE" || decsStrings[j]!="AKAZE" && !(detStrings[i]=="SIFT" && decsStrings[j]=="ORB"))
+                {
+                    //det_desc_matc_sel_string={detStrings[i],decsStrings[j],"MAT_BF","SEL_NN"};
+                    det_desc_matc_sel_string={"HARRIS","FREAK","MAT_BF","SEL_NN"};
+                    det_desc_matc_sel_strings.push_back(det_desc_matc_sel_string);
+                    cout<<detStrings[i]<<" "<<decsStrings[j]<<endl;
+                }
+            }
+        }
     /* MAIN LOOP OVER ALL IMAGES */
-
+ for(int i=0;i<det_desc_matc_sel_strings.size();i++)
+    {
+            dataBuffer.clear();
     for (size_t imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex+=imgStepWidth)
     {
         /* LOAD IMAGE INTO BUFFER */
@@ -99,10 +121,11 @@ int main(int argc, const char *argv[])
         /* DETECT & CLASSIFY OBJECTS */
 
         float confThreshold = 0.2;
-        float nmsThreshold = 0.4;        
+        float nmsThreshold = 0.4;   
+        bVis=false; 
         detectObjects((dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->boundingBoxes, confThreshold, nmsThreshold,
                       yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, bVis);
-
+        bVis=false; 
         cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
 
 
@@ -129,10 +152,11 @@ int main(int argc, const char *argv[])
         clusterLidarWithROI((dataBuffer.end()-1)->boundingBoxes, (dataBuffer.end() - 1)->lidarPoints, shrinkFactor, P_rect_00, R_rect_00, RT);
 
         // Visualize 3D objects
-        bVis = true;
+        bVis = false;
         if(bVis)
         {
-            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(2000, 2000), true);
+            //cout<<(dataBuffer.end()-1)->boundingBoxes.size()<<endl;
+            show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(500, 1000), false);
         }
         bVis = false;
 
@@ -140,7 +164,7 @@ int main(int argc, const char *argv[])
         
         
         // REMOVE THIS LINE BEFORE PROCEEDING WITH THE FINAL PROJECT
-        continue; // skips directly to the next image without processing what comes beneath
+        //continue; // skips directly to the next image without processing what comes beneath
 
         /* DETECT IMAGE KEYPOINTS */
 
@@ -150,17 +174,20 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
+        std::string detectorType = det_desc_matc_sel_strings[i][0];//"SHITOMASI","HARRIS", "FAST", "BRISK", "ORB", "AKAZE", "SIFT"
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
             detKeypointsShiTomasi(keypoints, imgGray, false);
         }
+        else if(detectorType.compare("HARRIS") == 0)
+        {
+            detKeypointsHarris(keypoints, imgGray, false);
+        }
         else
         {
-            //...
+        		detKeypointsModern(keypoints, imgGray,detectorType, false);
         }
-
         // optional : limit number of keypoints (helpful for debugging and learning)
         bool bLimitKpts = false;
         if (bLimitKpts)
@@ -184,9 +211,9 @@ int main(int argc, const char *argv[])
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         cv::Mat descriptors;
-        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        std::string descriptorType= det_desc_matc_sel_strings[i][1];// BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
-
+        
         // push descriptors for current frame to end of data buffer
         (dataBuffer.end() - 1)->descriptors = descriptors;
 
@@ -199,33 +226,68 @@ int main(int argc, const char *argv[])
             /* MATCH KEYPOINT DESCRIPTORS */
 
             vector<cv::DMatch> matches;
-            string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
-            string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            std::string matcherType = det_desc_matc_sel_strings[i][2];          // MAT_BF, MAT_FLANN
+            std::string descriptorType_matching;
+            if (descriptorType.compare("SIFT")== 0) 
+            {
+                descriptorType_matching = "DES_HOG"; 
+            }
+            else
+            {
+                descriptorType_matching = "DES_BINARY"; // DES_BINARY, DES_HOG
+            }
+            std::string selectorType = det_desc_matc_sel_strings[i][3];       // SEL_NN, SEL_KNN     // SEL_NN, SEL_KNN
 
+            string dir_name="../report_data/out.txt";
+            ofstream out;
+            out.open(dir_name,std::ios_base::app);
+            out << detectorType<<"_"<<descriptorType<<" ";
+            //out << "This is another line.\n";
+            out.close();    
             matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
                              (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
-                             matches, descriptorType, matcherType, selectorType);
+                             matches, descriptorType_matching, matcherType, selectorType);
 
             // store matches in current data frame
             (dataBuffer.end() - 1)->kptMatches = matches;
 
             cout << "#7 : MATCH KEYPOINT DESCRIPTORS done" << endl;
 
-            
+            bVis = false;
+            if (bVis)
+            {
+                cv::Mat matchImg = ((dataBuffer.end() - 1)->cameraImg).clone();
+                cv::drawMatches((dataBuffer.end() - 2)->cameraImg, (dataBuffer.end() - 2)->keypoints,
+                                (dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->keypoints,
+                                matches, matchImg,
+                                cv::Scalar::all(-1), cv::Scalar::all(-1),
+                                vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+
+                string windowName = "Matching keypoints between two camera images";
+                cv::namedWindow(windowName, 7);
+                cv::imshow(windowName, matchImg);
+                cout << "Press key to continue to next image" << endl;
+                cv::waitKey(0); // wait for key to be pressed
+            }
+            bVis = false;
             /* TRACK 3D OBJECT BOUNDING BOXES */
 
             //// STUDENT ASSIGNMENT
             //// TASK FP.1 -> match list of 3D objects (vector<BoundingBox>) between current and previous frame (implement ->matchBoundingBoxes)
             map<int, int> bbBestMatches;
             matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1)); // associate bounding boxes between current and previous frame using keypoint matches
+           
             //// EOF STUDENT ASSIGNMENT
 
             // store matches in current data frame
             (dataBuffer.end()-1)->bbMatches = bbBestMatches;
 
             cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << endl;
-
+            // for(auto mm:bbBestMatches)
+            // {
+            //     //bbBestMatches.insert(mm.first);
+            //     cout<<mm.first<<" "<<mm.second<<endl;
+            // }
 
             /* COMPUTE TTC ON OBJECT IN FRONT */
 
@@ -257,6 +319,7 @@ int main(int argc, const char *argv[])
                     //// TASK FP.2 -> compute time-to-collision based on Lidar data (implement -> computeTTCLidar)
                     double ttcLidar; 
                     computeTTCLidar(prevBB->lidarPoints, currBB->lidarPoints, sensorFrameRate, ttcLidar);
+                    //cout<<"###"<<endl;
                     //// EOF STUDENT ASSIGNMENT
 
                     //// STUDENT ASSIGNMENT
@@ -265,9 +328,29 @@ int main(int argc, const char *argv[])
                     double ttcCamera;
                     clusterKptMatchesWithROI(*currBB, (dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->kptMatches);                    
                     computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera);
-                    //// EOF STUDENT ASSIGNMENT
-
                     bVis = true;
+                    if (bVis)
+                    {
+                        cv::Mat matchImg = ((dataBuffer.end() - 1)->cameraImg).clone();
+                        cv::drawMatches((dataBuffer.end() - 2)->cameraImg, (dataBuffer.end() - 2)->keypoints,
+                                        (dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->keypoints,
+                                        currBB->kptMatches, matchImg,
+                                        cv::Scalar::all(-1), cv::Scalar::all(-1),
+                                        vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+
+                        string windowName = "Matching keypoints between two camera images";
+                        cv::namedWindow(windowName, 7);
+                        cv::imshow(windowName, matchImg);
+                        cout << "Press key to continue to next image" << endl;
+                        cv::waitKey(0); // wait for key to be pressed
+                    }
+                    bVis = false;
+                    //// EOF STUDENT ASSIGNMENT
+                    out.open(dir_name,std::ios_base::app);
+                    out << ttcLidar<<" "<<ttcCamera<<endl;
+                    //out << "This is another line.\n";
+                    out.close();   
+                    bVis = false;
                     if (bVis)
                     {
                         cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();
@@ -276,7 +359,16 @@ int main(int argc, const char *argv[])
                         
                         char str[200];
                         sprintf(str, "TTC Lidar : %f s, TTC Camera : %f s", ttcLidar, ttcCamera);
-                        putText(visImg, str, cv::Point2f(80, 50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(0,0,255));
+                        // Get text size
+                        cv::Size textSize = cv::getTextSize(str,cv::FONT_HERSHEY_PLAIN,3,2,0);
+                        // Center text
+                        cv::Point textOrg((visImg.cols - textSize.width)/2,40);
+                        cv::rectangle(visImg, textOrg + cv::Point(0,textSize.height*1.0),
+                                        textOrg + cv::Point(textSize.width, -textSize.height*1.0),
+                                        cv::Scalar::all(0),cv::FILLED);
+
+                        
+                        putText(visImg, str, cv::Point2f(80, 50), cv::FONT_HERSHEY_PLAIN, 2, cv::Scalar(255,255,255),2);
 
                         string windowName = "Final Results : TTC";
                         cv::namedWindow(windowName, 4);
@@ -292,6 +384,6 @@ int main(int argc, const char *argv[])
         }
 
     } // eof loop over all images
-
+    }
     return 0;
 }

@@ -109,15 +109,16 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
             height = (*it).roi.height;
             cv::rectangle(visImg, cv::Point(left, top), cv::Point(left+width, top+height),cv::Scalar(0, 255, 0), 2);
             
-            string label = cv::format("%.2f", (*it).confidence);
+            //string label = cv::format("%.2f %d", (*it).confidence,(*it).boxID);
+            string label = cv::format("%d", (*it).boxID);
             label = classes[((*it).classID)] + ":" + label;
         
             // Display label at the top of the bounding box
             int baseLine;
-            cv::Size labelSize = getTextSize(label, cv::FONT_ITALIC, 0.5, 1, &baseLine);
+            cv::Size labelSize = getTextSize(label, cv::FONT_ITALIC, 0.35, 1, &baseLine);
             top = max(top, labelSize.height);
             rectangle(visImg, cv::Point(left, top - round(1.5*labelSize.height)), cv::Point(left + round(1.5*labelSize.width), top + baseLine), cv::Scalar(255, 255, 255), cv::FILLED);
-            cv::putText(visImg, label, cv::Point(left, top), cv::FONT_ITALIC, 0.75, cv::Scalar(0,0,0),1);
+            cv::putText(visImg, label, cv::Point(left, top), cv::FONT_ITALIC, 0.35, cv::Scalar(0,0,0),1);
             
         }
         
